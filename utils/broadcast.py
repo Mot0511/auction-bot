@@ -1,4 +1,4 @@
-from maxapi.types import MessageCreated
+from maxapi.types import MessageCreated, ButtonsPayload
 from db import DBService
 
 
@@ -7,5 +7,5 @@ async def broadcast(event: MessageCreated, message: str, auction_id: int, db: DB
     for participant in participants:
         await event.bot.send_message(
             chat_id=participant[1],
-            text=message
+            text=message,
         )

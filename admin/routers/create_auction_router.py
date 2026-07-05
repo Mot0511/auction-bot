@@ -7,6 +7,7 @@ from maxapi.types import MessageCallback, MessageCreated
 from admin.keyboards import confirm_auction_kb, back_main_admin
 from admin.utils.make_confirm_auction_message import make_confirm_auction_message
 from db import DBService
+from filters.digit_filter import DigitFilter
 from models.auction import Auction
 from datetime import datetime
 
@@ -19,6 +20,7 @@ class AuctionState(StatesGroup):
     step = State()
     duration = State()
     countdown = State()
+    price = State()
 
 create_auction_router = Router()
 
@@ -34,25 +36,31 @@ async def get_body(event: MessageCreated, context: MemoryContext):
     await context.set_state(AuctionState.body)
 
 @create_auction_router.message_created(AuctionState.body)
-async def get_step(event: MessageCreated, context: MemoryContext):
+async def get_start_price(event: MessageCreated, context: MemoryContext):
     await context.update_data(body=event.message.body.text)
+    await event.message.answer(text='Укажите стартовую цену аукциона (в руб.)')
+    await context.set_state(AuctionState.price)
+
+@create_auction_router.message_created(AuctionState.price, DigitFilter())
+async def get_step(event: MessageCreated, context: MemoryContext):
+    await context.update_data(price=event.message.body.text)
     await event.message.answer(text='Укажите шаг ставки (в руб.)')
     await context.set_state(AuctionState.step)
 
-@create_auction_router.message_created(AuctionState.step)
-async def get_step(event: MessageCreated, context: MemoryContext):
+@create_auction_router.message_created(AuctionState.step, DigitFilter())
+async def get_countdown(event: MessageCreated, context: MemoryContext):
     await context.update_data(step=event.message.body.text)
     await event.message.answer(text='Укажите время таймера до начала аукциона (в мин.)')
     await context.set_state(AuctionState.countdown)
 
-@create_auction_router.message_created(AuctionState.countdown)
-async def get_step(event: MessageCreated, context: MemoryContext):
+@create_auction_router.message_created(AuctionState.countdown, DigitFilter())
+async def get_duration(event: MessageCreated, context: MemoryContext):
     await context.update_data(countdown=event.message.body.text)
     await event.message.answer(text='Укажите минимальную продолжительность аукциона (в мин.)')
     await context.set_state(AuctionState.duration)
 
-@create_auction_router.message_created(AuctionState.duration)
-async def get_step(event: MessageCreated, context: MemoryContext):
+@create_auction_router.message_created(AuctionState.duration, DigitFilter())
+async def confirm(event: MessageCreated, context: MemoryContext):
     await context.set_state(None)
     await context.update_data(duration=event.message.body.text)
     data = await context.get_data()
@@ -66,8 +74,9 @@ async def confirm_auction(event: MessageCallback, context: MemoryContext, db: DB
         id=auction_id,
         title=data['title'],
         body=data['body'],
-        price=0,
-        step=data['step'],
+        start_price=int(data['price']),
+        max_bet=int(data['price']),
+        step=int(data['step']),
         media='',
         state=0,
         date=int(datetime.now().timestamp()),

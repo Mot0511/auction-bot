@@ -34,19 +34,20 @@ async def media(event: MessageCreated):
     await event.message.answer(text=event.message.body.attachments[0].payload.token)
 
 @dp.bot_started()
-async def start(event: BotStarted):
+async def start(event: BotStarted, db: DBService, context: MemoryContext):
     await event.bot.send_message(
         chat_id=event.chat_id,
         text="Добро пожаловать в бот автомобильных аукционов!",
     )
+    await send_last_auction(event, context, db)
 
 @dp.message_created(Command("start"))
 async def start(event: MessageCreated, context: MemoryContext, db: DBService):
     await send_last_auction(event, context, db)
 
-dp.include_routers(user_router)
 dp.include_routers(create_auction_router)
 dp.include_routers(admin_router)
+dp.include_routers(user_router)
 
 async def main():
     await dp.start_polling(bot, skip_updates=True)

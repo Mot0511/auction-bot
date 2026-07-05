@@ -10,6 +10,7 @@ from admin.keyboards import stop_auction_kb, create_auction_kb, back_admin
 from admin.utils.make_auction_message import make_auction_message
 from db import DBService
 from timer import Timer
+from utils.broadcast import broadcast
 
 
 class AdminForm(StatesGroup):
@@ -49,11 +50,13 @@ async def get_admin_code(event: MessageCreated, context: MemoryContext, db: DBSe
 
 @admin_router.message_callback(F.callback.payload == 'stop-auction')
 async def stop_auction(event: MessageCallback, context: MemoryContext, db: DBService, timer: Timer):
-    data = await context.get_data()
-    auction_id = data['last_auction_id']
-    await db.stop_auction(auction_id)
-    await timer.stop_timer()
+    auction = timer.current_auction
     await send_last_auction(event, context, db)
+    if timer.stage == 1:
+        await broadcast(event, f'Аукцион #{auction.id}: "{auction.title}" остановлен досрочно.', auction.id, db)
+
+    await timer.stop_timer()
+    await db.stop_auction(auction.id)
 
 async def send_last_auction(event, context: MemoryContext, db: DBService):
     auction = await db.get_last_auction()

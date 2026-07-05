@@ -1,13 +1,17 @@
 import asyncio
-from maxapi.types import MessageCreated
+from maxapi.types import MessageCreated, attachments, ButtonsPayload
 from db import DBService
 from models.auction import Auction
+from models.user import User
 from utils.broadcast import broadcast
 
 
 class Timer:
     stage: int = -1
+
     current_auction: Auction = None
+    leader: User
+
     seconds: int = None
     event: MessageCreated = None
 
@@ -24,9 +28,9 @@ class Timer:
             if self.seconds <= 0:
                 await broadcast(
                     self.event,
-                    f'Торги по аукциону #{auction.id}: "{auction.title}" начались! Можно делать ставки (шаг равен {auction.step} руб.).',
+                    f'Торги по аукциону #{auction.id}: "{auction.title}" начались! Можете сделать свою ставку сообщением с числом.\n\nСтартовая цена - {auction.start_price} руб.\nШаг ставки - {auction.step} руб.',
                     auction.id,
-                    self.db
+                    self.db,
                 )
                 await self.db.start_auction(auction.id)
                 self.stage = 1

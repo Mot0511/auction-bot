@@ -28,8 +28,8 @@ class DBService:
 
     async def create_auction(self, data):
         self.cursor.execute(
-            "INSERT INTO auctions (title, body, price, step, media, state, date, countdown, duration) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id",
-            (data['title'], data['body'], 0, int(data['step']), '', 0, datetime.now().timestamp(), data['countdown'], data['duration'])
+            "INSERT INTO auctions (title, body, start_price, max_bet, step, media, state, date, countdown, duration) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id",
+            (data['title'], data['body'], data['price'], data['price'], int(data['step']), '', 0, datetime.now().timestamp(), data['countdown'], data['duration'])
         )
         data = self.cursor.fetchone()
         self.connection.commit()
@@ -56,6 +56,13 @@ class DBService:
         )
         self.connection.commit()
 
+
+    async def set_max_bet(self, bet: int, auction_id: int):
+        self.cursor.execute(
+            "UPDATE auctions SET max_bet=? WHERE id=?",
+            (bet, auction_id)
+        )
+        self.connection.commit()
 
     async def leave_auction(self, chat_id, auction_id):
         self.cursor.execute(

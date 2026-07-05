@@ -7,6 +7,7 @@ def make_confirm_auction_message(data):
 {data['title']}\n
 <u>Описание:</u>
 {data['body']}\n
+<u>Стартовая цена:</u> {data['price']} руб.
 <u>Шаг ставки:</u> {data['step']}\n
 <u>До начала (в мин.):</u> {data['countdown']}
 <u>Продолжительность аукциона (в мин.):</u> {data['duration']}

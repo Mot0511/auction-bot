@@ -8,8 +8,10 @@ from maxapi.types import MessageCreated, MessageCallback, CallbackButton, Button
 import consts
 from admin.utils.make_auction_message import make_auction_message
 from db import DBService
+from filters.digit_filter import DigitFilter
 from timer import Timer
 from user.keyboards import get_history_btn, take_part_btn, accept_agreenments_btn, leave_auction_btn
+from utils.broadcast import broadcast
 
 user_router = Router()
 
@@ -78,3 +80,27 @@ async def leave_auction(event: MessageCallback, context: MemoryContext, db: DBSe
         text=f'Вы покинули аукцион #{auction.id}: {auction.title}'
     )
     await send_last_auction(event, context, db)
+
+@user_router.message_created(F.message.body.text, DigitFilter())
+async def place_bet(event: MessageCreated, db: DBService, timer: Timer):
+    auction = timer.current_auction
+    if timer.stage != 1: return
+
+    bet = int(event.message.body.text)
+    if bet % auction.step != 0:
+        await event.message.answer(text=f'Ставка должна быть кратна шагу ставки текущего аукциона ({auction.step} руб.)')
+        return
+
+    if bet <= auction.max_bet:
+        await event.message.answer(text=f'Ваша ставка должна быть больше прошлой максимальной ставки ({auction.max_bet} руб.)')
+        return
+
+    await broadcast(
+        event,
+        f"{event.message.sender.first_name} - {bet} руб. (+{bet - auction.max_bet})",
+        auction.id,
+        db
+    )
+    timer.current_auction.max_bet = bet
+    await db.set_max_bet(bet, auction.id)
+
