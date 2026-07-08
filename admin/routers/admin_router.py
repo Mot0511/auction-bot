@@ -26,8 +26,7 @@ async def admin(event: MessageCreated, context: MemoryContext, db: DBService, ti
     await context.set_state(None)
     timer.admin_id = event.message.recipient.chat_id
     admin_data = await context.get_data()
-    # if admin_data.get('code') == os.getenv('ADMIN_CODE'):
-    if True:
+    if admin_data.get('code') == os.getenv('ADMIN_CODE'):
         await send_last_auction(event, context, db)
     else:
         await context.set_state(AdminForm.code)
@@ -45,6 +44,7 @@ async def get_admin_code(event: MessageCreated, context: MemoryContext, db: DBSe
     await context.set_state(None)
     code = event.message.body.text
     if code == os.getenv('ADMIN_CODE'):
+        await context.update_data(code=code)
         await send_last_auction(event, context, db)
     else:
         await event.message.answer(
@@ -63,6 +63,7 @@ async def stop_auction(event: MessageCallback, context: MemoryContext, db: DBSer
     await send_last_auction(event, context, db)
 
 async def send_last_auction(event, context: MemoryContext, db: DBService):
+    await context.update_data(auctions_history_start=None)
     auction = await db.get_last_auction()
     btns = []
     if auction:

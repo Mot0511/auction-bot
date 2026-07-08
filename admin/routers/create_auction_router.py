@@ -39,7 +39,7 @@ async def get_body(event: MessageCreated, context: MemoryContext):
 @create_auction_router.message_created(AuctionState.body)
 async def get_media(event: MessageCreated, context: MemoryContext):
     await context.update_data(body=event.message.body.text)
-    await event.message.answer(text='Можете отправить фото или видео (не обязательно)', attachments=[ButtonsPayload(buttons=[[skip_media_btn]]).pack()])
+    await event.message.answer(text='Можете приложить фото (не обязательно)', attachments=[ButtonsPayload(buttons=[[skip_media_btn]]).pack()])
     await context.set_state(AuctionState.media)
 
 @create_auction_router.message_created(AuctionState.media)

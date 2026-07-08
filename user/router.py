@@ -18,6 +18,7 @@ from user.keyboards import get_history_btn, take_part_btn, accept_agreements_btn
 from utils.broadcast import broadcast
 from models.user import User
 from maxapi.types.attachments.contact import Contact
+from maxapi.types import AttachmentUpload, PhotoAttachmentPayload
 
 user_router = Router()
 
@@ -27,8 +28,10 @@ async def main_menu(event: MessageCallback, context: MemoryContext, db: DBServic
 
 async def send_last_auction(event, context: MemoryContext, db: DBService):
     await context.set_state(None)
+    await context.update_data(auctions_history_start=None)
     auction = await db.get_last_auction()
     if auction:
+
         attachments = []
         btns = [[get_history_btn]]
         if auction.state != -1:
@@ -39,7 +42,7 @@ async def send_last_auction(event, context: MemoryContext, db: DBService):
         await event.message.answer(
             text=await make_auction_message(auction),
             parse_mode=ParseMode.HTML,
-            attachments=attachments 
+            attachments=attachments
         )
     else:
         await event.message.answer(text='До настоящего момента никакие аукционы не проводились.')
@@ -54,7 +57,7 @@ async def get_participants(event: MessageCallback, db: DBService):
 async def get_auctions_history(event: MessageCallback, db: DBService, context: MemoryContext):
     memory = await context.get_data()
     start = 0
-    if 'auctions_history_start' in memory:
+    if memory.get('auctions_history_start'):
         start = memory['auctions_history_start']
 
     auctions = await db.get_auctions(start, start+3)

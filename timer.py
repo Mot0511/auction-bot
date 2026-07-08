@@ -27,7 +27,7 @@ class Timer:
 
     async def start_timer(self, auction: Auction):
         self.current_auction = auction
-        self.seconds = auction.countdown
+        self.seconds = auction.countdown * 60
         self.stage = 0
         while self.stage == 0:
             await asyncio.sleep(1)
@@ -45,7 +45,7 @@ class Timer:
                 await self.track_end(auction)
 
     async def track_end(self, auction: Auction):
-        self.seconds = auction.duration
+        self.seconds = auction.duration * 60
         while self.stage == 1:
             await asyncio.sleep(1)
             self.seconds -= 1
@@ -78,7 +78,7 @@ class Timer:
                 await self.db.stop_auction(auction.id)
 
     async def add_time(self):
-        self.seconds += 3
+        self.seconds += 3 * 60
 
     async def stop_timer(self):
         self.stage = -1
