@@ -18,7 +18,7 @@ from user.keyboards import get_history_btn, take_part_btn, accept_agreements_btn
 from utils.broadcast import broadcast
 from models.user import User
 from maxapi.types.attachments.contact import Contact
-from maxapi.types import AttachmentUpload, PhotoAttachmentPayload
+from maxapi.types import AttachmentUpload, PhotoAttachmentPayload, BotStarted
 
 user_router = Router()
 
@@ -31,7 +31,6 @@ async def send_last_auction(event, context: MemoryContext, db: DBService):
     await context.update_data(auctions_history_start=None)
     auction = await db.get_last_auction()
     if auction:
-
         attachments = []
         btns = [[get_history_btn]]
         if auction.state != -1:
@@ -39,12 +38,24 @@ async def send_last_auction(event, context: MemoryContext, db: DBService):
             btns[1].append(get_participants_btn)
         attachments.append(ButtonsPayload(buttons=btns).pack())
         if auction.media: attachments.append(await get_media_attachment(auction.media))
+        if isinstance(event, BotStarted):
+            await event.bot.send_message(
+                chat_id=event.chat_id,
+                text=await make_auction_message(auction),
+                parse_mode=ParseMode.HTML,
+                attachments=attachments
+            )
+            return
+        
         await event.message.answer(
             text=await make_auction_message(auction),
             parse_mode=ParseMode.HTML,
             attachments=attachments
         )
     else:
+        if isinstance(event, BotStarted): 
+            await event.bot.send_message(chat_id=event.chat_id, text='До настоящего момента никакие аукционы не проводились.')
+            return
         await event.message.answer(text='До настоящего момента никакие аукционы не проводились.')
 
 @user_router.message_callback(F.callback.payload == 'get-participants')
