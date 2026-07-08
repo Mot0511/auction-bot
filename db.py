@@ -1,6 +1,8 @@
 from datetime import datetime
 from sqlite3 import Connection, Cursor
+from typing import Any
 
+from models.user import User
 from models.auction import Auction
 
 
@@ -9,8 +11,8 @@ class DBService:
         self.connection = connection
         self.cursor = cursor
 
-    async def get_auctions(self):
-        self.cursor.execute("SELECT * FROM auctions")
+    async def get_auctions(self, start, end):
+        self.cursor.execute("SELECT * FROM auctions ORDER BY id DESC LIMIT ?, ?", (start, end))
         data = self.cursor.fetchall()
         if data:
             res = [Auction(*row) for row in data]
@@ -29,7 +31,7 @@ class DBService:
     async def create_auction(self, data):
         self.cursor.execute(
             "INSERT INTO auctions (title, body, start_price, max_bet, step, media, state, date, countdown, duration) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id",
-            (data['title'], data['body'], data['price'], data['price'], int(data['step']), '', 0, datetime.now().timestamp(), data['countdown'], data['duration'])
+            (data['title'], data['body'], data['price'], data['price'], int(data['step']), data['media'], 0, datetime.now().timestamp(), data['countdown'], data['duration'])
         )
         data = self.cursor.fetchone()
         self.connection.commit()
@@ -49,13 +51,14 @@ class DBService:
         )
         self.connection.commit()
 
-    async def join_auction(self, chat_id, tel, username, auction_id):
+    async def join_auction(self, user_id, chat_id, tel, username, auction_id) -> Any:
         self.cursor.execute(
-            "INSERT INTO users (chat_id, tel, username, auction) VALUES (?, ?, ?, ?)",
-            (chat_id, tel, username, auction_id)
+            "INSERT INTO users (user_id, chat_id, tel, username, auction) VALUES (?, ?, ?, ?, ?) RETURNING id",
+            (user_id, chat_id, tel, username, auction_id)
         )
+        data = self.cursor.fetchone()
         self.connection.commit()
-
+        return data[0]
 
     async def set_max_bet(self, bet: int, auction_id: int):
         self.cursor.execute(
@@ -66,14 +69,16 @@ class DBService:
 
     async def leave_auction(self, chat_id, auction_id):
         self.cursor.execute(
-            "DELETE FROM users WHERE chat_id=? and auction=?",
+            "DELETE FROM users WHERE chat_id=? AND auction=?",
             (chat_id, auction_id)
         )
         self.connection.commit()
 
     async def get_participants(self, auction_id):
         self.cursor.execute("SELECT * FROM users WHERE auction=?", (auction_id,))
-        return self.cursor.fetchall()
+        data = self.cursor.fetchall()
+        res = [User(*row) for row in data]
+        return res
 
     async def is_user_exists(self, chat_id):
         self.cursor.execute("SELECT * FROM users WHERE chat_id=?", (chat_id,))

@@ -1,7 +1,7 @@
 from models.auction import Auction
 from datetime import datetime
 
-def make_auction_message(auction: Auction):
+async def make_auction_message(auction: Auction):
 
     date = datetime.fromtimestamp(auction.date)
 

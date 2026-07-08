@@ -4,12 +4,15 @@ from maxapi.context import StatesGroup, State, MemoryContext
 from maxapi.enums import ParseMode
 from maxapi.filters.command import Command
 from maxapi.filters import F
-from maxapi.types import MessageCreated, MessageCallback
+from maxapi.types import MessageCreated, MessageCallback, ButtonsPayload
 
-from admin.keyboards import stop_auction_kb, create_auction_kb, back_admin
+from admin.keyboards import create_auction_btn, get_participants_btn, stop_auction_btn, back_admin_kb
+from admin.utils.get_media_attachment import get_media_attachment
 from admin.utils.make_auction_message import make_auction_message
+from admin.utils.make_participants_message import make_participants_message
 from db import DBService
 from timer import Timer
+from user.keyboards import get_history_btn
 from utils.broadcast import broadcast
 
 
@@ -19,8 +22,9 @@ class AdminForm(StatesGroup):
 admin_router = Router()
 
 @admin_router.message_created(Command("admin"))
-async def admin(event: MessageCreated, context: MemoryContext, db: DBService):
+async def admin(event: MessageCreated, context: MemoryContext, db: DBService, timer: Timer):
     await context.set_state(None)
+    timer.admin_id = event.message.recipient.chat_id
     admin_data = await context.get_data()
     # if admin_data.get('code') == os.getenv('ADMIN_CODE'):
     if True:
@@ -50,30 +54,36 @@ async def get_admin_code(event: MessageCreated, context: MemoryContext, db: DBSe
 
 @admin_router.message_callback(F.callback.payload == 'stop-auction')
 async def stop_auction(event: MessageCallback, context: MemoryContext, db: DBService, timer: Timer):
-    auction = timer.current_auction
-    await send_last_auction(event, context, db)
-    if timer.stage == 1:
+    auction = await db.get_last_auction()
+    if timer.stage != -1:
         await broadcast(event, f'Аукцион #{auction.id}: "{auction.title}" остановлен досрочно.', auction.id, db)
 
     await timer.stop_timer()
     await db.stop_auction(auction.id)
+    await send_last_auction(event, context, db)
 
 async def send_last_auction(event, context: MemoryContext, db: DBService):
     auction = await db.get_last_auction()
+    btns = []
     if auction:
         await context.update_data(last_auction_id=auction.id)
+        btns += [[create_auction_btn if auction.state == -1 else stop_auction_btn], [get_participants_btn, get_history_btn]]
+        attachemnts = [ButtonsPayload(buttons=btns).pack()]
+        if auction.media: attachemnts.append(await get_media_attachment(auction.media))
         if isinstance(event, MessageCallback):
             await event.answer(
-                new_text=make_auction_message(auction),
+                new_text=await make_auction_message(auction),
                 format=ParseMode.HTML,
-                attachments=[create_auction_kb.as_markup() if auction.state == -1 else stop_auction_kb.as_markup()]
+                attachments=attachemnts
             )
         else:
             await event.message.answer(
-                text=make_auction_message(auction),
+                text=await make_auction_message(auction),
                 format=ParseMode.HTML,
-                attachments=[create_auction_kb.as_markup() if auction.state == -1 else stop_auction_kb.as_markup()]
+                attachments=attachemnts
             )
     else:
+        btns.append([create_auction_btn])
         await event.message.answer(text='До настоящего момента никакие аукционы не проводились',
-                           attachments=[create_auction_kb.as_markup()])
+                           attachments=[ButtonsPayload(buttons=btns).pack()])
+

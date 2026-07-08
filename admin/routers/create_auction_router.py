@@ -3,20 +3,21 @@ import asyncio
 from maxapi import Router, F
 from maxapi.context import MemoryContext, StatesGroup, State
 from maxapi.enums import ParseMode
-from maxapi.types import MessageCallback, MessageCreated
-from admin.keyboards import confirm_auction_kb, back_main_admin
+from maxapi.types import MessageCallback, MessageCreated, ButtonsPayload
+from admin.keyboards import confirm_auction_kb, back_main_admin_kb, skip_media_btn
 from admin.utils.make_confirm_auction_message import make_confirm_auction_message
 from db import DBService
 from filters.digit_filter import DigitFilter
 from models.auction import Auction
 from datetime import datetime
-
+from models.user import User
 from timer import Timer
 
 
 class AuctionState(StatesGroup):
     title = State()
     body = State()
+    media = State()
     step = State()
     duration = State()
     countdown = State()
@@ -36,8 +37,19 @@ async def get_body(event: MessageCreated, context: MemoryContext):
     await context.set_state(AuctionState.body)
 
 @create_auction_router.message_created(AuctionState.body)
-async def get_start_price(event: MessageCreated, context: MemoryContext):
+async def get_media(event: MessageCreated, context: MemoryContext):
     await context.update_data(body=event.message.body.text)
+    await event.message.answer(text='Можете отправить фото или видео (не обязательно)', attachments=[ButtonsPayload(buttons=[[skip_media_btn]]).pack()])
+    await context.set_state(AuctionState.media)
+
+@create_auction_router.message_created(AuctionState.media)
+async def set_media(event: MessageCreated, context: MemoryContext):
+    if event.message.body.attachments:
+        token = event.message.body.attachments[0].payload.token
+        print(token)
+        await context.update_data(media=token)
+    else:
+        await context.update_data(media='')
     await event.message.answer(text='Укажите стартовую цену аукциона (в руб.)')
     await context.set_state(AuctionState.price)
 
@@ -64,10 +76,10 @@ async def confirm(event: MessageCreated, context: MemoryContext):
     await context.set_state(None)
     await context.update_data(duration=event.message.body.text)
     data = await context.get_data()
-    await event.message.answer(text='Все верно?\n'+make_confirm_auction_message(data), attachments=[confirm_auction_kb.as_markup()], parse_mode=ParseMode.HTML)
+    await event.message.answer(text='Все верно?\n'+await make_confirm_auction_message(data), attachments=[confirm_auction_kb.as_markup()], parse_mode=ParseMode.HTML)
 
-@create_auction_router.message_callback(F.callback.payload == 'confirm-auction')
-async def confirm_auction(event: MessageCallback, context: MemoryContext, db: DBService, timer: Timer):
+@create_auction_router.message_created(F.message.body.text == 'Подтвердить создание аукциона')
+async def confirm_auction(event: MessageCreated, context: MemoryContext, db: DBService, timer: Timer):
     data = await context.get_data()
     auction_id = await db.create_auction(data)
     auction = Auction(
@@ -77,12 +89,22 @@ async def confirm_auction(event: MessageCallback, context: MemoryContext, db: DB
         start_price=int(data['price']),
         max_bet=int(data['price']),
         step=int(data['step']),
-        media='',
+        media=data['media'],
         state=0,
         date=int(datetime.now().timestamp()),
         countdown=int(data['countdown']),
         duration=int(data['duration']),
     )
-    await db.join_auction(event.message.recipient.chat_id, '', '', auction_id)
+    userdata = event.message.sender
+    id = await db.join_auction(userdata.user_id, event.message.recipient.chat_id, '', userdata.first_name, auction_id)
+    user = User(
+        id=id,
+        user_id=userdata.user_id,
+        chat_id=event.message.recipient.chat_id,
+        tel=0,
+        username=f'{userdata.first_name} (администратор)',
+        auction=auction.id,
+    )
+    await timer.join(user)
     asyncio.create_task(timer.start_timer(auction))
-    await event.answer(new_text=f'Аукцион создан. Минут до запуска: {data['countdown']}', attachments=[back_main_admin.as_markup()])
+    await event.message.answer(text=f'Аукцион создан. Минут до запуска: {data['countdown']}', attachments=[back_main_admin_kb.as_markup()])

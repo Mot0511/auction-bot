@@ -1,7 +1,7 @@
 from models.auction import Auction
 from datetime import datetime
 
-def make_confirm_auction_message(data):
+async def make_confirm_auction_message(data):
     return f"""
 <u>Тема:</u>
 {data['title']}\n

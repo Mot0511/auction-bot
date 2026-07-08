@@ -6,7 +6,7 @@ from dotenv import load_dotenv
 from maxapi import Bot, Dispatcher
 from maxapi.context import MemoryContext
 from maxapi.enums import ParseMode
-from maxapi.types import BotStarted, Command, MessageCreated, MessageCallback
+from maxapi.types import BotStarted, Command, MessageCreated, MessageCallback, ButtonsPayload, RequestContactButton
 from maxapi.filters import F
 from admin.routers.admin_router import admin_router
 from admin.routers.create_auction_router import create_auction_router
@@ -28,10 +28,6 @@ dp.register_inner_middleware(DatabaseMiddleware(db))
 
 timer = Timer(db)
 dp.register_inner_middleware(TimerMiddleware(timer))
-
-@dp.message_created(F.message.body.attachments)
-async def media(event: MessageCreated):
-    await event.message.answer(text=event.message.body.attachments[0].payload.token)
 
 @dp.bot_started()
 async def start(event: BotStarted, db: DBService, context: MemoryContext):
