@@ -7,11 +7,12 @@ from maxapi.types import MessageCreated, MessageCallback, CallbackButton, Button
 
 import consts
 from admin.keyboards import get_participants_btn
-from admin.utils.get_media_attachment import get_media_attachment
+from admin.utils.get_media_attachments import get_media_attachments
 from admin.utils.make_auction_message import make_auction_message
 from admin.utils.make_participants_message import make_participants_message
 from db import DBService
 from filters.digit_filter import DigitFilter
+from filters.not_command_filter import NotCommandFilter
 from timer import Timer
 from user.keyboards import get_history_btn, take_part_btn, accept_agreements_btn, leave_auction_btn, get_contact_btn, \
     back_main_btn, more_history_btn
@@ -19,11 +20,16 @@ from utils.broadcast import broadcast
 from models.user import User
 from maxapi.types.attachments.contact import Contact
 from maxapi.types import AttachmentUpload, PhotoAttachmentPayload, BotStarted
+from filters.tel_filter import TelFilter
+from utils.get_str_time import get_str_time
 
 user_router = Router()
 
+class UserState(StatesGroup):
+    tel = State()
+
 @user_router.message_callback(F.callback.payload == 'last-auction')
-async def main_menu(event: MessageCallback, context: MemoryContext, db: DBService):
+async def main_menu(event: MessageCallback, context: MemoryContext, db: DBService): 
     await send_last_auction(event, context, db)
 
 async def send_last_auction(event, context: MemoryContext, db: DBService):
@@ -37,7 +43,7 @@ async def send_last_auction(event, context: MemoryContext, db: DBService):
             btns.insert(0, [take_part_btn])
             btns[1].append(get_participants_btn)
         attachments.append(ButtonsPayload(buttons=btns).pack())
-        if auction.media: attachments.append(await get_media_attachment(auction.media))
+        if auction.media: attachments += await get_media_attachments(auction.media)
         if isinstance(event, BotStarted):
             await event.bot.send_message(
                 chat_id=event.chat_id,
@@ -78,7 +84,7 @@ async def get_auctions_history(event: MessageCallback, db: DBService, context: M
     for i, auction in enumerate(auctions):
         attachments = []
         if i == len(auctions) - 1: attachments.append(ButtonsPayload(buttons=[[more_history_btn], [back_main_btn]]).pack())
-        if auction.media: attachments.append(await get_media_attachment(auction.media))
+        if auction.media: attachments += await get_media_attachments(auction.media)
         await event.message.answer(
             text=await make_auction_message(auction),
             attachments=attachments,
@@ -89,10 +95,10 @@ async def get_auctions_history(event: MessageCallback, db: DBService, context: M
 
 
 @user_router.message_callback(F.callback.payload == 'take-part')
-async def take_part(event: MessageCallback, db: DBService):
+async def take_part(event: MessageCallback, db: DBService, context: MemoryContext):
     is_user_exists = await db.is_user_exists(event.message.recipient.chat_id)
     if is_user_exists:
-        await get_contact(event)
+        await get_contact(event, context)
     else:
         await event.answer(
             new_text='Сначала нужно принять согласия на условия сервиса и политику конфиденциальности.',
@@ -115,32 +121,37 @@ async def take_part(event: MessageCallback, db: DBService):
         )
 
 @user_router.message_callback(F.callback.payload == 'accept-agreements')
-async def accept_agreements(event: MessageCallback):
-    await get_contact(event)
+async def accept_agreements(event: MessageCallback, context: MemoryContext):
+    await get_contact(event, context)
 
-async def get_contact(event: MessageCallback):
+async def get_contact(event: MessageCallback, context: MemoryContext):
     await event.message.answer(
-        text='Сейчас вам нужно отправить свой контакт, чтобы администратор смог с вами связаться в случае вашего выигрыша.',
-        attachments=[ButtonsPayload(buttons=[[get_contact_btn]]).pack()]
+        text='Напишите свой номер телефона (например +79221234567), чтобы администратор смог связаться с вами в случае вашего выигрыша.',
     )
+    await context.set_state(UserState.tel)
 
-@user_router.message_created(ContactFilter())
-async def join_auction(event: MessageCreated, contact: Contact, db: DBService, timer: Timer):
+@user_router.message_created(F.message.body.text and UserState.tel and NotCommandFilter() and TelFilter())
+async def join_auction(event: MessageCreated, db: DBService, timer: Timer, context: MemoryContext):
+    await context.set_state(None)
+    tel = event.message.body.text
     auction = await db.get_last_auction()
     if not auction: await event.message.answer(text='До настоящего момента никакие аукционы не проводились.')
     userdata = event.message.sender
-    id = await db.join_auction(userdata.user_id, event.message.recipient.chat_id, contact.payload.vcf.phone, userdata.first_name, auction.id)
+    id = await db.join_auction(userdata.user_id, event.message.recipient.chat_id, tel, userdata.first_name, auction.id)
     user = User(
         id=id,
         user_id=userdata.user_id,
         chat_id=event.message.recipient.chat_id,
-        tel=0,
+        tel=tel,
         username=userdata.first_name,
         auction=auction.id
     )
-    await timer.join(user, contact)
+    await timer.join(user)
     await event.message.answer(
-        text=f'Вы приняли участие в аукционе #{auction.id}: "{auction.title}".\n'+(f'Он начнется через {timer.seconds} секунд.' if auction.state == 0 else ''),
+        text=f'Вы приняли участие в аукционе #{auction.id}: "{auction.title}".\n' +
+        (f'Он начнется через {await get_str_time(timer.seconds)}' if auction.state == 0 else 
+         (f'Он закончится через {await get_str_time(timer.seconds)}' if auction.state == 1 else '')
+         ),
         attachments=[ButtonsPayload(buttons=[[leave_auction_btn]]).pack()]
     )
 
@@ -179,5 +190,5 @@ async def place_bet(event: MessageCreated, db: DBService, timer: Timer):
     timer.current_auction.max_bet = bet
     timer.leader = timer.participants[event.message.sender.user_id]
     await db.set_max_bet(bet, auction.id)
-    if timer.seconds <= 10:
+    if timer.seconds <= 120:
         await timer.add_time()

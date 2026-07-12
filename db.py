@@ -11,11 +11,16 @@ class DBService:
         self.connection = connection
         self.cursor = cursor
 
+    async def get_media_tokens(self, auction_id: int):
+        self.cursor.execute("SELECT token FROM media WHERE auction=?", (auction_id,))
+        tokens = [row[0] for row in self.cursor.fetchall()]
+        return tokens
+
     async def get_auctions(self, start, end):
         self.cursor.execute("SELECT * FROM auctions ORDER BY id DESC LIMIT ?, ?", (start, end))
         data = self.cursor.fetchall()
         if data:
-            res = [Auction(*row) for row in data]
+            res = [Auction(*row, await self.get_media_tokens(row[0])) for row in data]
             return res
         else:
             return None
@@ -23,20 +28,25 @@ class DBService:
     async def get_last_auction(self):
         self.cursor.execute("SELECT * FROM auctions ORDER BY date DESC LIMIT 1")
         data = self.cursor.fetchone()
+        media = await self.get_media_tokens(data[0])
         if data:
-            return Auction(*data)
+            return Auction(*data, media)
         else:
             return None
 
     async def create_auction(self, data):
         self.cursor.execute(
-            "INSERT INTO auctions (title, body, start_price, max_bet, step, media, state, date, countdown, duration) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id",
-            (data['title'], data['body'], data['price'], data['price'], int(data['step']), data['media'], 0, datetime.now().timestamp(), data['countdown'], data['duration'])
+            "INSERT INTO auctions (title, body, start_price, max_bet, step, state, date, countdown, duration) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id",
+            (data['title'], data['body'], data['price'], data['price'], int(data['step']), 0, datetime.now().timestamp(), data['countdown'], data['duration'])
         )
-        data = self.cursor.fetchone()
+        res = self.cursor.fetchone()
+        if data['media']:
+            for token in data['media']:
+                self.cursor.execute("INSERT INTO media (token, auction) VALUES (?, ?)", (token, res[0]))
+
         self.connection.commit()
 
-        return data[0]
+        return res[0]
 
     async def start_auction(self, auction_id):
         self.cursor.execute(
@@ -65,6 +75,14 @@ class DBService:
             "UPDATE auctions SET max_bet=? WHERE id=?",
             (bet, auction_id)
         )
+        self.connection.commit()
+
+    async def set_step(self, new_step: int, auction_id: int):
+        self.cursor.execute(
+            "UPDATE auctions SET step=? WHERE id=?",
+            (new_step, auction_id)
+        )
+
         self.connection.commit()
 
     async def leave_auction(self, chat_id, auction_id):

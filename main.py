@@ -7,7 +7,7 @@ from maxapi import Bot, Dispatcher
 from maxapi.context import MemoryContext
 from maxapi.enums import ParseMode
 from maxapi.types import BotStarted, Command, MessageCreated, MessageCallback, ButtonsPayload, RequestContactButton
-from maxapi.filters import F
+from maxapi.filters import F, ContactFilter
 from admin.routers.admin_router import admin_router
 from admin.routers.create_auction_router import create_auction_router
 from admin.utils.make_auction_message import make_auction_message
@@ -18,7 +18,8 @@ from timer import Timer
 from user.router import user_router, send_last_auction
 from user.keyboards import *
 from admin.keyboards import get_participants_btn
-from admin.utils import get_media_attachment
+from admin.utils import get_media_attachments
+from maxapi.types.attachments.contact import Contact
 
 load_dotenv()
 bot = Bot(token=os.getenv("TOKEN"))
@@ -44,8 +45,8 @@ async def start(event: BotStarted, db: DBService, context: MemoryContext):
 async def start(event: MessageCreated, context: MemoryContext, db: DBService):
     await send_last_auction(event, context, db)
 
-dp.include_routers(create_auction_router)
 dp.include_routers(admin_router)
+dp.include_routers(create_auction_router)
 dp.include_routers(user_router)
 
 async def main():

@@ -47,29 +47,26 @@ class Timer:
     async def track_end(self, auction: Auction):
         self.seconds = auction.duration * 60
         while self.stage == 1:
+            print(f'Идет аукцион - {self.seconds}')
             await asyncio.sleep(1)
             self.seconds -= 1
-            print(f'Идет аукцион - {self.seconds}')
-            if self.seconds <= 0:
+            if 600 <= self.seconds <= 3600 and self.seconds % 600 == 0:
+                await self.broadcast(f'До конца аукциона {self.seconds // 60} минут.')
+            elif self.seconds == 300:
+                await self.broadcast(f'До конца аукциона 5 минут.')
+            elif 120 <= self.seconds <= 240 and self.seconds % 60 == 0:
+                await self.broadcast(f'До конца аукциона {self.seconds // 60} минуты.')
+            elif self.seconds == 60:
+                await self.broadcast(f'До конца аукциона 1 минута')
+            elif self.seconds <= 0:
                 if not self.leader:
-                    await broadcast(
-                        self.event,
-                        f'Аукцион #{auction.id}: "{auction.title}" завершен!\nСтавок не было, поэтому никто не выиграл.</b>',
-                        auction.id,
-                        self.db
-                    )
+                    await self.broadcast(f'Аукцион #{auction.id}: "{auction.title}" завершен!\nСтавок не было, поэтому никто не выиграл.</b>')
                 else:
-                    await broadcast(
-                        self.event,
-                        f'Аукцион #{auction.id}: "{auction.title}" завершен!\nПродано участнику <b>{self.leader.username}</b> за {self.current_auction.max_bet} руб.',
-                        auction.id,
-                        self.db
-                    )
-                    if self.contacts[self.leader.user_id]:
+                    await self.broadcast(f'Аукцион #{auction.id}: "{auction.title}" завершен!\nПродано участнику <b>{self.leader.username}</b> за {self.current_auction.max_bet} руб.')
+                    if self.leader.tel:
                         await self.event.bot.send_message(
                             chat_id=self.admin_id,
-                            text='Контакт победителя',
-                            attachments=[self.contacts[self.leader.user_id]]
+                            text=self.leader.tel,
                         )
                 self.stage = -1
                 self.current_auction = None
@@ -78,15 +75,21 @@ class Timer:
                 await self.db.stop_auction(auction.id)
 
     async def add_time(self):
-        self.seconds += 3 * 60
+        self.seconds = 2 * 60
 
     async def stop_timer(self):
         self.stage = -1
 
-    async def join(self, user: User, contact: Optional[Contact] = None):
+    async def join(self, user: User):
         self.participants[user.user_id] = user
-        self.contacts[user.user_id] = contact
 
     async def leave(self, user_id: int):
         del self.participants[user_id]
-        del self.contacts[user_id]
+
+    async def broadcast(self, text: str):
+        await broadcast(
+            self.event,
+            text,
+            self.current_auction.id,
+            self.db
+        )

@@ -6,11 +6,9 @@ stop_auction_btn = CallbackButton(text='Остановить аукцион', pa
 get_auctions_history = CallbackButton(text='История аукционов', payload='get-auctions-history')
 get_participants_btn = CallbackButton(text='Список участников', payload='get-participants')
 skip_media_btn = MessageButton(text='Пропустить')
+change_step_btn = CallbackButton(text='Изменить шаг ставки', payload='change-step')
 
-confirm_auction_kb = InlineKeyboardBuilder()
-confirm_auction_kb.row(
-    MessageButton(text='Подтвердить создание аукциона')
-)
+confirm_auction_btn = MessageButton(text='Подтвердить создание аукциона')
 
 back_main_admin_kb = InlineKeyboardBuilder()
 back_main_admin_kb.row(
