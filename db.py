@@ -28,8 +28,8 @@ class DBService:
     async def get_last_auction(self):
         self.cursor.execute("SELECT * FROM auctions ORDER BY date DESC LIMIT 1")
         data = self.cursor.fetchone()
-        media = await self.get_media_tokens(data[0])
         if data:
+            media = await self.get_media_tokens(data[0])
             return Auction(*data, media)
         else:
             return None
