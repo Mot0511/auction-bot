@@ -35,14 +35,14 @@ async def get_title(event: MessageCallback, context: MemoryContext):
 @create_auction_router.message_created(AuctionState.title)
 async def get_body(event: MessageCreated, context: MemoryContext):
     await context.update_data(title=event.message.body.text)
-    await event.message.answer(text='Введите описание аукциона', attachments=[ButtonsPayload(buttons=[[CallbackButton(text='Вернуться назад', payload='create-auction')]]).pack()])
+    await event.message.answer(text='Введите описание аукциона')
     await context.set_state(AuctionState.body)
 
 @create_auction_router.message_callback(F.callback.payload == 'get-media')
 @create_auction_router.message_created(AuctionState.body)
 async def get_media(event: MessageCreated, context: MemoryContext):
     await context.update_data(body=event.message.body.text)
-    await event.message.answer(text='Можете приложить изображения (не обязательно)', attachments=[ButtonsPayload(buttons=[[skip_media_btn], [CallbackButton(text='Вернуться назад', payload='get-desc')]]).pack()])
+    await event.message.answer(text='Можете приложить изображения (не обязательно)', attachments=[ButtonsPayload(buttons=[[skip_media_btn]]).pack()])
     await context.set_state(AuctionState.media)
 
 @create_auction_router.message_callback(F.callback.payload == 'get-price')
@@ -53,28 +53,28 @@ async def set_media(event: MessageCreated, context: MemoryContext):
         await context.update_data(media=tokens)
     else:
         await context.update_data(media=[])
-    await event.message.answer(text='Укажите стартовую цену аукциона (в руб.)', attachments=[ButtonsPayload(buttons=[[CallbackButton(text='Вернуться назад', payload='get-media')]]).pack()])
+    await event.message.answer(text='Укажите стартовую цену аукциона (в руб.)')
     await context.set_state(AuctionState.price)
 
 @create_auction_router.message_callback(F.callback.payload == 'get-step')
 @create_auction_router.message_created(AuctionState.price, DigitFilter())
 async def get_step(event: MessageCreated, context: MemoryContext):
     await context.update_data(price=event.message.body.text)
-    await event.message.answer(text='Укажите шаг ставки (в руб.)', attachments=[ButtonsPayload(buttons=[[CallbackButton(text='Вернуться назад', payload='get-price')]]).pack()])
+    await event.message.answer(text='Укажите шаг ставки (в руб.)')
     await context.set_state(AuctionState.step)
 
 @create_auction_router.message_callback(F.callback.payload == 'get-countdown')
 @create_auction_router.message_created(AuctionState.step, DigitFilter())
 async def get_countdown(event: MessageCreated, context: MemoryContext):
     await context.update_data(step=event.message.body.text)
-    await event.message.answer(text='Укажите время таймера до начала аукциона (в мин.)', attachments=[ButtonsPayload(buttons=[[CallbackButton(text='Вернуться назад', payload='get-step')]]).pack()])
+    await event.message.answer(text='Укажите время таймера до начала аукциона (в мин.)')
     await context.set_state(AuctionState.countdown)
 
 @create_auction_router.message_callback(F.callback.payload == 'get-duration')
 @create_auction_router.message_created(AuctionState.countdown, DigitFilter())
 async def get_duration(event: MessageCreated, context: MemoryContext):
     await context.update_data(countdown=event.message.body.text)
-    await event.message.answer(text='Укажите минимальную продолжительность аукциона (в мин.)', attachments=[ButtonsPayload(buttons=[[CallbackButton(text='Вернуться назад', payload='get-countdown')]]).pack()])
+    await event.message.answer(text='Укажите минимальную продолжительность аукциона (в мин.)')
     await context.set_state(AuctionState.duration)
 
 @create_auction_router.message_created(AuctionState.duration, DigitFilter())
@@ -84,7 +84,7 @@ async def confirm(event: MessageCreated, context: MemoryContext):
     data = await context.get_data()
     await event.message.answer(
         text='Все верно?\n'+await make_confirm_auction_message(data),
-        # attachments=[ButtonsPayload(buttons=[[confirm_auction_btn], [CallbackButton(text='Вернуться назад', payload='get-duration')]]).pack()]),
+        attachments=[ButtonsPayload(buttons=[[confirm_auction_btn]]).pack()],
         parse_mode=ParseMode.HTML
     )
 
